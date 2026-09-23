@@ -1,690 +1,1065 @@
-"""
-Netflix Data Analysis - Interactive Dashboard
-Built with Streamlit, Pandas, Matplotlib, and Seaborn.
-Features a Netflix-inspired dark UI with restrained red accents.
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
 
-# ---------------------------------------------------------
-# Page Configuration & Netflix Dark Theme Styling
-# ---------------------------------------------------------
+# =========================================================
+# PAGE CONFIGURATION
+# =========================================================
+
 st.set_page_config(
-    page_title="Netflix Data Analysis | EDA & Dashboard",
+    page_title="MovieHub | Movie Data Analytics",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for polished dark Netflix aesthetic
+# =========================================================
+# CUSTOM CSS
+# =========================================================
+
 st.markdown("""
 <style>
-    .main { background-color: #141414; color: #E5E5E5; }
-    .stApp { background-color: #141414; }
-    h1, h2, h3, h4, h5, h6 {
-        color: #FFFFFF !important;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    }
-    h1 { font-size: 2.15rem !important; margin-bottom: 0.25rem !important; }
-    h2 { font-size: 1.55rem !important; margin-top: 0.4rem !important; margin-bottom: 0.35rem !important; }
-    h3 { font-size: 1.2rem !important; margin-top: 0.35rem !important; margin-bottom: 0.3rem !important; }
 
-    .metric-card {
-        background: #1F1F1F;
-        border: 1px solid #2B2B2B;
-        border-radius: 10px;
-        padding: 13px 10px;
-        min-height: 108px;
-        text-align: center;
-        box-sizing: border-box;
-        overflow: hidden;
-    }
-    .metric-title {
-        color: #999999;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin-bottom: 4px;
-        white-space: nowrap;
-    }
-    .metric-value {
-        color: #FFFFFF;
-        font-size: 1.55rem;
-        font-weight: 700;
-        line-height: 1.15;
-        margin: 0;
-    }
-    .metric-subtitle {
-        color: #E50914;
-        font-size: 0.68rem;
-        margin-top: 4px;
-        font-weight: 500;
-    }
+.stApp {
+    background-color: #111111;
+    color: #E5E5E5;
+}
 
-    .section-gap { height: 0.35rem; }
-    .insight-box {
-        background: #1A1A1A;
-        border-left: 3px solid #E50914;
-        padding: 10px 14px;
-        border-radius: 0 6px 6px 0;
-        margin-bottom: 8px;
-        color: #E5E5E5;
-        font-size: 0.88rem;
-    }
-    [data-testid="stSidebar"] {
-        background-color: #181818;
-        border-right: 1px solid #282828;
-    }
-    [data-testid="stSidebar"] h2 { color: #E50914 !important; letter-spacing: 0.05em; }
-    div[data-testid="stVerticalBlock"] > div { max-width: 100%; }
-    .stPlotlyChart, [data-testid="stImage"], .element-container { max-width: 100%; }
-    [data-testid="stDataFrame"] { max-width: 100%; }
+.main {
+    background-color: #111111;
+}
 
-    @media (max-width: 900px) {
-        h1 { font-size: 1.75rem !important; }
-        .metric-value { font-size: 1.3rem; }
-        .metric-card { min-height: 96px; padding: 10px 7px; }
-    }
+h1, h2, h3, h4 {
+    color: white !important;
+}
+
+.metric-card {
+    background-color: #1D1D1D;
+    border: 1px solid #333333;
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    min-height: 110px;
+}
+
+.metric-title {
+    color: #AAAAAA;
+    font-size: 13px;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.metric-value {
+    color: white;
+    font-size: 28px;
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+.metric-subtitle {
+    color: #E50914;
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+.insight-box {
+    background-color: #1C1C1C;
+    border-left: 4px solid #E50914;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+[data-testid="stSidebar"] {
+    background-color: #181818;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-# Visual theme constants
-NETFLIX_RED = '#E50914'
-NETFLIX_DARK_RED = '#B81D24'
-ACCENT_GRAY = '#606060'
-LIGHT_GRAY = '#E5E5E5'
-BG_COLOR = '#141414'
-CARD_COLOR = '#1F1F1F'
 
-def set_plot_style():
-    plt.style.use('dark_background')
-    plt.rcParams['figure.facecolor'] = BG_COLOR
-    plt.rcParams['axes.facecolor'] = CARD_COLOR
-    plt.rcParams['text.color'] = LIGHT_GRAY
-    plt.rcParams['axes.labelcolor'] = LIGHT_GRAY
-    plt.rcParams['xtick.color'] = LIGHT_GRAY
-    plt.rcParams['ytick.color'] = LIGHT_GRAY
-    plt.rcParams['grid.color'] = '#333333'
+# =========================================================
+# COLORS
+# =========================================================
 
-set_plot_style()
+RED = "#E50914"
+DARK = "#111111"
+CARD = "#1D1D1D"
+WHITE = "#FFFFFF"
+GRAY = "#AAAAAA"
 
-# ---------------------------------------------------------
-# Data Ingestion & Robust Preprocessing
-# ---------------------------------------------------------
+
+# =========================================================
+# LOAD DATA
+# =========================================================
+
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/netflix_titles.csv", encoding="utf-8")
-    
-    # Drop full duplicates if any
-    df = df.drop_duplicates()
-    
-    # Sanitize corrupted characters in director/cast
-    for col in ['director', 'cast', 'title']:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.replace('Ral', 'Raúl')
-            df[col] = df[col].replace('nan', np.nan)
-            
-    # Datetime conversion & year/month extraction
-    df['date_added_clean'] = pd.to_datetime(df['date_added'].astype(str).str.strip(), errors='coerce')
-    df['year_added'] = df['date_added_clean'].dt.year
-    df['month_added'] = df['date_added_clean'].dt.month_name()
-    
-    # Numeric release year
-    df['release_year'] = pd.to_numeric(df['release_year'], errors='coerce')
-    
-    # Duration parsing (numeric value & unit)
-    df['duration_num'] = pd.to_numeric(df['duration'].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
-    df['duration_unit'] = df['duration'].astype(str).str.extract(r'([A-Za-z]+)')[0]
-    
-    # Missing values imputation for presentation
-    df['country_imputed'] = df['country'].fillna('Unknown')
-    df['director_imputed'] = df['director'].fillna('Unknown Director')
-    df['rating_imputed'] = df['rating'].fillna('Unknown')
-    
-    # Unpack helper columns
-    df['genre_list'] = df['listed_in'].fillna('').apply(lambda x: [g.strip() for g in x.split(',') if g.strip()])
-    df['country_list'] = df['country'].fillna('').apply(lambda x: [c.strip() for c in x.split(',') if c.strip()])
-    df['primary_genre'] = df['genre_list'].apply(lambda x: x[0] if len(x) > 0 else 'Unknown')
-    df['primary_country'] = df['country_list'].apply(lambda x: x[0] if len(x) > 0 else 'Unknown')
-    
+
+    file_path = Path("data/netflix_titles.csv")
+
+    if not file_path.exists():
+        st.error(
+            "Dataset not found. Please make sure the file exists at: "
+            "data/netflix_titles.csv"
+        )
+        st.stop()
+
+    df = pd.read_csv(file_path, encoding="utf-8")
+
+    # Remove duplicate rows
+    df = df.drop_duplicates().copy()
+
+    # -----------------------------------------------------
+    # Make sure important columns exist
+    # -----------------------------------------------------
+
+    required_columns = [
+        "show_id",
+        "type",
+        "title",
+        "director",
+        "cast",
+        "country",
+        "date_added",
+        "release_year",
+        "rating",
+        "duration",
+        "listed_in",
+        "description"
+    ]
+
+    for column in required_columns:
+        if column not in df.columns:
+            df[column] = np.nan
+
+    # -----------------------------------------------------
+    # Clean text columns
+    # -----------------------------------------------------
+
+    text_columns = [
+        "type",
+        "title",
+        "director",
+        "cast",
+        "country",
+        "rating",
+        "duration",
+        "listed_in",
+        "description"
+    ]
+
+    for column in text_columns:
+        df[column] = df[column].fillna("").astype(str).str.strip()
+
+    # -----------------------------------------------------
+    # Release year
+    # -----------------------------------------------------
+
+    df["release_year"] = pd.to_numeric(
+        df["release_year"],
+        errors="coerce"
+    )
+
+    # -----------------------------------------------------
+    # Date added
+    # -----------------------------------------------------
+
+    df["date_added_clean"] = pd.to_datetime(
+        df["date_added"],
+        errors="coerce"
+    )
+
+    df["year_added"] = df["date_added_clean"].dt.year
+
+    # -----------------------------------------------------
+    # Duration
+    # -----------------------------------------------------
+
+    df["duration_num"] = pd.to_numeric(
+        df["duration"].str.extract(r"(\d+)")[0],
+        errors="coerce"
+    )
+
+    df["duration_unit"] = (
+        df["duration"]
+        .str.extract(r"([A-Za-z]+)")[0]
+        .fillna("")
+    )
+
+    # -----------------------------------------------------
+    # Country
+    # -----------------------------------------------------
+
+    df["country_list"] = df["country"].apply(
+        lambda x: [
+            item.strip()
+            for item in x.split(",")
+            if item.strip()
+        ]
+    )
+
+    # -----------------------------------------------------
+    # Genre
+    # -----------------------------------------------------
+
+    df["genre_list"] = df["listed_in"].apply(
+        lambda x: [
+            item.strip()
+            for item in x.split(",")
+            if item.strip()
+        ]
+    )
+
+    # -----------------------------------------------------
+    # Primary genre/country
+    # -----------------------------------------------------
+
+    df["primary_genre"] = df["genre_list"].apply(
+        lambda x: x[0] if x else "Unknown"
+    )
+
+    df["primary_country"] = df["country_list"].apply(
+        lambda x: x[0] if x else "Unknown"
+    )
+
+    # -----------------------------------------------------
+    # Display columns
+    # -----------------------------------------------------
+
+    df["director_display"] = df["director"].replace(
+        "", "Unknown Director"
+    )
+
+    df["country_display"] = df["country"].replace(
+        "", "Unknown"
+    )
+
+    df["rating_display"] = df["rating"].replace(
+        "", "Unknown"
+    )
+
     return df
 
-df_raw = load_data()
 
-# ---------------------------------------------------------
-# Sidebar Filter Controls
-# ---------------------------------------------------------
-st.sidebar.markdown("## NETFLIX")
-st.sidebar.markdown("### 🎛️ Dashboard Filters")
+df = load_data()
 
-# Reset Filters mechanism
-if st.sidebar.button("🔄 Reset Filters", use_container_width=True):
-    for key in ["filter_types", "filter_years", "filter_countries", "filter_ratings", "filter_genres"]:
-        if key in st.session_state:
-            del st.session_state[key]
-    st.rerun()
 
-# 1. Content Type Filter
-all_types = sorted(df_raw['type'].dropna().unique().tolist())
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+st.sidebar.title("🎬 MOVIEHUB")
+st.sidebar.markdown("### Dashboard Filters")
+
+# Content Type
+types = sorted(
+    df["type"].dropna().unique().tolist()
+)
+
 selected_types = st.sidebar.multiselect(
     "Content Type",
-    options=all_types,
-    default=all_types,
-    key="filter_types"
+    types,
+    default=types
 )
 
-# 2. Release Year Range
-min_yr = int(df_raw['release_year'].min())
-max_yr = int(df_raw['release_year'].max())
-selected_years = st.sidebar.slider(
-    "Release Year Range",
-    min_value=min_yr,
-    max_value=max_yr,
-    value=(min_yr, max_yr),
-    key="filter_years"
+
+# Release year
+valid_years = df["release_year"].dropna()
+
+if not valid_years.empty:
+
+    min_year = int(valid_years.min())
+    max_year = int(valid_years.max())
+
+    selected_years = st.sidebar.slider(
+        "Release Year",
+        min_year,
+        max_year,
+        (min_year, max_year)
+    )
+
+else:
+
+    selected_years = (1900, 2100)
+
+
+# Countries
+countries = sorted(
+    {
+        country
+        for values in df["country_list"]
+        for country in values
+        if country
+    }
 )
 
-# 3. Country Filter (Unpacked top countries + All)
-all_unique_countries = sorted(list({c for sublist in df_raw['country_list'] for c in sublist if c}))
 selected_countries = st.sidebar.multiselect(
     "Country",
-    options=["All"] + all_unique_countries,
-    default=["All"],
-    key="filter_countries"
+    countries
 )
 
-# 4. Rating Filter
-all_ratings = sorted(df_raw['rating_imputed'].unique().tolist())
+
+# Ratings
+ratings = sorted(
+    [
+        rating
+        for rating in df["rating_display"].unique()
+        if rating
+    ]
+)
+
 selected_ratings = st.sidebar.multiselect(
-    "Content Rating",
-    options=["All"] + all_ratings,
-    default=["All"],
-    key="filter_ratings"
+    "Rating",
+    ratings
 )
 
-# 5. Genre Filter (Unpacked all genres)
-all_unique_genres = sorted(list({g for sublist in df_raw['genre_list'] for g in sublist if g}))
+
+# Genres
+genres = sorted(
+    {
+        genre
+        for values in df["genre_list"]
+        for genre in values
+        if genre
+    }
+)
+
 selected_genres = st.sidebar.multiselect(
     "Genre",
-    options=["All"] + all_unique_genres,
-    default=["All"],
-    key="filter_genres"
+    genres
 )
 
-# Filtering logic
-filtered_df = df_raw.copy()
 
-# Type filter
+# =========================================================
+# FILTER DATA
+# =========================================================
+
+filtered_df = df.copy()
+
+
+# Type
 if selected_types:
-    filtered_df = filtered_df[filtered_df['type'].isin(selected_types)]
+    filtered_df = filtered_df[
+        filtered_df["type"].isin(selected_types)
+    ]
 else:
     filtered_df = filtered_df.iloc[0:0]
 
-# Year filter
+
+# Year
 filtered_df = filtered_df[
-    (filtered_df['release_year'] >= selected_years[0]) & 
-    (filtered_df['release_year'] <= selected_years[1])
+    filtered_df["release_year"].between(
+        selected_years[0],
+        selected_years[1],
+        inclusive="both"
+    )
 ]
 
-# Country filter
-if "All" not in selected_countries and len(selected_countries) > 0:
-    filtered_df = filtered_df[filtered_df['country_list'].apply(lambda lst: any(c in selected_countries for c in lst))]
 
-# Rating filter
-if "All" not in selected_ratings and len(selected_ratings) > 0:
-    filtered_df = filtered_df[filtered_df['rating_imputed'].isin(selected_ratings)]
+# Country
+if selected_countries:
 
-# Genre filter
-if "All" not in selected_genres and len(selected_genres) > 0:
-    filtered_df = filtered_df[filtered_df['genre_list'].apply(lambda lst: any(g in selected_genres for g in lst))]
+    filtered_df = filtered_df[
+        filtered_df["country_list"].apply(
+            lambda x: any(
+                country in selected_countries
+                for country in x
+            )
+        )
+    ]
 
-# Sidebar info
+
+# Rating
+if selected_ratings:
+
+    filtered_df = filtered_df[
+        filtered_df["rating_display"].isin(
+            selected_ratings
+        )
+    ]
+
+
+# Genre
+if selected_genres:
+
+    filtered_df = filtered_df[
+        filtered_df["genre_list"].apply(
+            lambda x: any(
+                genre in selected_genres
+                for genre in x
+            )
+        )
+    ]
+
+
 st.sidebar.divider()
-st.sidebar.caption(f"Showing **{len(filtered_df):,}** of **{len(df_raw):,}** total titles")
-st.sidebar.caption("Dataset source: Public Netflix Catalog (TidyTuesday)")
 
-# ---------------------------------------------------------
-# Main App Header
-# ---------------------------------------------------------
-st.title("🎬 Netflix Data Analysis")
-st.markdown("#### *Exploratory Data Analysis and Interactive Dashboard*")
-st.markdown("Analyze content trends, geographical distribution, genre dynamics, maturity ratings, and movie runtimes across the Netflix catalogue.")
+st.sidebar.write(
+    f"Showing **{len(filtered_df):,}** "
+    f"of **{len(df):,}** titles"
+)
 
-# Check for empty filter result
+
+# =========================================================
+# HEADER
+# =========================================================
+
+st.title("🎬 MovieHub")
+st.markdown(
+    "### Movie & TV Show Data Analytics Platform"
+)
+
+st.write(
+    "Explore movies and TV shows using interactive filters, "
+    "charts, ratings, genres, countries and release trends."
+)
+
+
+# =========================================================
+# EMPTY DATA CHECK
+# =========================================================
+
 if filtered_df.empty:
-    st.warning("⚠️ No titles match the current filter selection. Please adjust your filters in the sidebar or click 'Reset Filters'.")
+
+    st.warning(
+        "No content matches the selected filters."
+    )
+
     st.stop()
 
-# ---------------------------------------------------------
-# Dynamic KPI Cards
-# ---------------------------------------------------------
+
+# =========================================================
+# KPI CALCULATIONS
+# =========================================================
+
 total_titles = len(filtered_df)
-movies_cnt = int((filtered_df['type'] == 'Movie').sum())
-tv_cnt = int((filtered_df['type'] == 'TV Show').sum())
-countries_cnt = len({c for sublist in filtered_df['country_list'] for c in sublist if c})
-genres_cnt = len({g for sublist in filtered_df['genre_list'] for g in sublist if g})
-latest_release = int(filtered_df['release_year'].max()) if not filtered_df['release_year'].isna().all() else "N/A"
 
-movie_pct = (movies_cnt / total_titles * 100) if total_titles > 0 else 0
-tv_pct = (tv_cnt / total_titles * 100) if total_titles > 0 else 0
+movies = int(
+    (filtered_df["type"] == "Movie").sum()
+)
 
-# Responsive KPI layout: 3 cards per row to prevent horizontal clipping.
-kpi_row1 = st.columns(3)
-kpi_row2 = st.columns(3)
+tv_shows = int(
+    (filtered_df["type"] == "TV Show").sum()
+)
 
-with kpi_row1[0]:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">Total Titles</div>
-        <div class="metric-value">{total_titles:,}</div>
-        <div class="metric-subtitle">Filtered Catalogue</div>
-    </div>
-    """, unsafe_allow_html=True)
+countries_count = len(
+    {
+        country
+        for values in filtered_df["country_list"]
+        for country in values
+        if country
+    }
+)
 
-with kpi_row1[1]:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">Movies</div>
-        <div class="metric-value">{movies_cnt:,}</div>
-        <div class="metric-subtitle">{movie_pct:.1f}% of total</div>
-    </div>
-    """, unsafe_allow_html=True)
+genres_count = len(
+    {
+        genre
+        for values in filtered_df["genre_list"]
+        for genre in values
+        if genre
+    }
+)
 
-with kpi_row1[2]:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">TV Shows</div>
-        <div class="metric-value">{tv_cnt:,}</div>
-        <div class="metric-subtitle">{tv_pct:.1f}% of total</div>
-    </div>
-    """, unsafe_allow_html=True)
+valid_release_years = filtered_df[
+    "release_year"
+].dropna()
 
-with kpi_row2[0]:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">Countries</div>
-        <div class="metric-value">{countries_cnt:,}</div>
-        <div class="metric-subtitle">Represented</div>
-    </div>
-    """, unsafe_allow_html=True)
+latest_year = (
+    int(valid_release_years.max())
+    if not valid_release_years.empty
+    else "N/A"
+)
 
-with kpi_row2[1]:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">Genres</div>
-        <div class="metric-value">{genres_cnt:,}</div>
-        <div class="metric-subtitle">Unique Categories</div>
-    </div>
-    """, unsafe_allow_html=True)
 
-with kpi_row2[2]:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">Latest Release</div>
-        <div class="metric-value">{latest_release}</div>
-        <div class="metric-subtitle">Release Year</div>
-    </div>
-    """, unsafe_allow_html=True)
+# =========================================================
+# KPI CARDS
+# =========================================================
 
-st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
+c1, c2, c3, c4, c5 = st.columns(5)
 
-# ---------------------------------------------------------
-# SECTION 1: Overview
-# ---------------------------------------------------------
-st.markdown("### 📊 Content Type Overview")
 
-col_ov1, col_ov2 = st.columns([1, 1])
+with c1:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Total Titles</div>
+            <div class="metric-value">{total_titles:,}</div>
+            <div class="metric-subtitle">Catalogue</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-with col_ov1:
-    st.subheader("Movies vs TV Shows Count")
-    type_counts = filtered_df['type'].value_counts()
-    fig, ax = plt.subplots(figsize=(5.2, 3.4))
-    colors = [NETFLIX_RED if t == 'Movie' else '#505050' for t in type_counts.index]
-    bars = ax.bar(type_counts.index, type_counts.values, color=colors, width=0.45, edgecolor='#2E2E2E', linewidth=1.2)
-    for b in bars:
-        h = b.get_height()
-        ax.annotate(f'{h:,}\n({h/total_titles*100:.1f}%)',
-                    xy=(b.get_x() + b.get_width()/2, h),
-                    xytext=(0, 4), textcoords="offset points",
-                    ha='center', va='bottom', fontsize=10, fontweight='bold', color=LIGHT_GRAY)
-    ax.set_ylabel("Number of Titles", fontsize=10)
-    ax.set_ylim(0, max(type_counts.values) * 1.2 if len(type_counts) > 0 else 10)
-    ax.grid(axis='y', linestyle='--', alpha=0.3)
-    st.pyplot(fig, clear_figure=True)
 
-with col_ov2:
-    st.subheader("Catalogue Share (%)")
-    fig, ax = plt.subplots(figsize=(5.2, 3.4))
-    colors = [NETFLIX_RED if t == 'Movie' else '#404040' for t in type_counts.index]
-    wedges, texts, autotexts = ax.pie(
+with c2:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Movies</div>
+            <div class="metric-value">{movies:,}</div>
+            <div class="metric-subtitle">Films</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with c3:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">TV Shows</div>
+            <div class="metric-value">{tv_shows:,}</div>
+            <div class="metric-subtitle">Series</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with c4:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Countries</div>
+            <div class="metric-value">{countries_count:,}</div>
+            <div class="metric-subtitle">Represented</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+with c5:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-title">Genres</div>
+            <div class="metric-value">{genres_count:,}</div>
+            <div class="metric-subtitle">Categories</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+st.divider()
+
+
+# =========================================================
+# CONTENT TYPE
+# =========================================================
+
+st.header("📊 Content Overview")
+
+col1, col2 = st.columns(2)
+
+type_counts = filtered_df["type"].value_counts()
+
+
+with col1:
+
+    st.subheader("Movies vs TV Shows")
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    colors = [
+        RED if value == "Movie"
+        else "#555555"
+        for value in type_counts.index
+    ]
+
+    bars = ax.bar(
+        type_counts.index,
+        type_counts.values,
+        color=colors
+    )
+
+    ax.set_ylabel("Number of Titles")
+    ax.set_facecolor(CARD)
+    fig.patch.set_facecolor(DARK)
+
+    for bar in bars:
+
+        height = bar.get_height()
+
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height,
+            f"{int(height):,}",
+            ha="center",
+            va="bottom",
+            color="white"
+        )
+
+    st.pyplot(fig)
+    plt.close(fig)
+
+
+with col2:
+
+    st.subheader("Catalogue Percentage")
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    ax.pie(
         type_counts.values,
         labels=type_counts.index,
-        autopct='%1.1f%%',
-        startangle=140,
-        colors=colors,
-        pctdistance=0.75,
-        wedgeprops=dict(width=0.45, edgecolor=BG_COLOR, linewidth=2),
-        textprops=dict(color=LIGHT_GRAY, fontsize=11, fontweight='bold')
+        autopct="%1.1f%%",
+        startangle=90,
+        colors=[
+            RED,
+            "#555555"
+        ],
+        textprops={"color": "white"}
     )
-    for at in autotexts:
-        at.set_color('white')
-        at.set_weight('bold')
-    st.pyplot(fig, clear_figure=True)
+
+    fig.patch.set_facecolor(DARK)
+
+    st.pyplot(fig)
+    plt.close(fig)
+
 
 st.divider()
 
-# ---------------------------------------------------------
-# SECTION 2: Genre Analysis
-# ---------------------------------------------------------
-st.markdown("### 🎭 Genre Analysis")
 
-col_g1, col_g2 = st.columns([1.1, 1.2])
+# =========================================================
+# GENRE ANALYSIS
+# =========================================================
 
-all_filtered_genres = pd.Series([g for sublist in filtered_df['genre_list'] for g in sublist])
-top_10_genres = all_filtered_genres.value_counts().head(10).sort_values(ascending=True)
+st.header("🎭 Genre Analysis")
 
-with col_g1:
-    st.subheader("Top 10 Overall Genres")
-    if not top_10_genres.empty:
-        fig, ax = plt.subplots(figsize=(6.0, 3.8))
-        norm = plt.Normalize(top_10_genres.values.min(), top_10_genres.values.max())
-        colors = plt.cm.Reds(norm(top_10_genres.values) * 0.7 + 0.3)
-        bars = ax.barh(top_10_genres.index, top_10_genres.values, color=colors, height=0.6)
-        for b in bars:
-            w = b.get_width()
-            ax.annotate(f' {w:,}', xy=(w, b.get_y() + b.get_height()/2),
-                        xytext=(3, 0), textcoords="offset points", ha='left', va='center', fontsize=9, color=LIGHT_GRAY)
-        ax.set_xlabel("Number of Titles", fontsize=10)
-        ax.set_xlim(0, max(top_10_genres.values) * 1.15)
-        ax.grid(axis='x', linestyle='--', alpha=0.3)
-        st.pyplot(fig, clear_figure=True)
-    else:
-        st.info("No genre data available.")
+genre_series = pd.Series(
+    [
+        genre
+        for values in filtered_df["genre_list"]
+        for genre in values
+    ]
+)
 
-with col_g2:
-    st.subheader("Movie vs TV Show Top Genres")
-    m_genres = pd.Series([g for sublist in filtered_df[filtered_df['type']=='Movie']['genre_list'] for g in sublist]).value_counts().head(5)
-    t_genres = pd.Series([g for sublist in filtered_df[filtered_df['type']=='TV Show']['genre_list'] for g in sublist]).value_counts().head(5)
-    
-    fig, (ax_m, ax_t) = plt.subplots(1, 2, figsize=(7.5, 3.8))
-    if not m_genres.empty:
-        ax_m.barh(m_genres.sort_values().index, m_genres.sort_values().values, color=NETFLIX_RED, height=0.55)
-        ax_m.set_title("Movies", fontsize=11, fontweight='bold', color='white')
-        ax_m.grid(axis='x', linestyle='--', alpha=0.3)
-    if not t_genres.empty:
-        ax_t.barh(t_genres.sort_values().index, t_genres.sort_values().values, color='#00A8E8', height=0.55)
-        ax_t.set_title("TV Shows", fontsize=11, fontweight='bold', color='white')
-        ax_t.grid(axis='x', linestyle='--', alpha=0.3)
-    plt.tight_layout()
-    st.pyplot(fig, clear_figure=True)
+top_genres = (
+    genre_series
+    .value_counts()
+    .head(10)
+    .sort_values()
+)
 
-st.divider()
 
-# ---------------------------------------------------------
-# SECTION 3: Geographic Analysis
-# ---------------------------------------------------------
-st.markdown("### 🌍 Geographic Distribution")
+if not top_genres.empty:
 
-col_geo1, col_geo2 = st.columns([1.2, 1])
+    fig, ax = plt.subplots(figsize=(9, 5))
 
-all_filtered_countries = pd.Series([c for sublist in filtered_df['country_list'] for c in sublist if c])
-top_10_countries = all_filtered_countries.value_counts().head(10).sort_values(ascending=True)
+    ax.barh(
+        top_genres.index,
+        top_genres.values,
+        color=RED
+    )
 
-with col_geo1:
-    st.subheader("Top 10 Content Producing Countries")
-    if not top_10_countries.empty:
-        fig, ax = plt.subplots(figsize=(6.0, 3.6))
-        norm = plt.Normalize(top_10_countries.values.min(), top_10_countries.values.max())
-        colors = plt.cm.Reds(norm(top_10_countries.values) * 0.7 + 0.3)
-        bars = ax.barh(top_10_countries.index, top_10_countries.values, color=colors, height=0.6)
-        for b in bars:
-            w = b.get_width()
-            ax.annotate(f' {w:,}', xy=(w, b.get_y() + b.get_height()/2),
-                        xytext=(4, 0), textcoords="offset points", ha='left', va='center', fontsize=9, color=LIGHT_GRAY)
-        ax.set_xlabel("Number of Titles", fontsize=10)
-        ax.set_xlim(0, max(top_10_countries.values) * 1.15)
-        ax.grid(axis='x', linestyle='--', alpha=0.3)
-        st.pyplot(fig, clear_figure=True)
-    else:
-        st.info("No country data available.")
+    ax.set_xlabel("Number of Titles")
+    ax.set_facecolor(CARD)
+    fig.patch.set_facecolor(DARK)
 
-with col_geo2:
-    st.subheader("Country Share Table")
-    if not top_10_countries.empty:
-        country_df = top_10_countries.sort_values(ascending=False).reset_index()
-        country_df.columns = ["Country", "Titles"]
-        country_df["Percentage"] = (country_df["Titles"] / total_titles * 100).map("{:.1f}%".format)
-        st.dataframe(country_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No country data available.")
+    for i, value in enumerate(top_genres.values):
+
+        ax.text(
+            value,
+            i,
+            f" {value:,}",
+            va="center",
+            color="white"
+        )
+
+    st.pyplot(fig)
+    plt.close(fig)
+
 
 st.divider()
 
-# ---------------------------------------------------------
-# SECTION 4: Time Analysis
-# ---------------------------------------------------------
-st.markdown("### 📈 Temporal Trends & Content Growth")
 
-col_t1, col_t2 = st.columns([1.2, 1])
+# =========================================================
+# COUNTRY ANALYSIS
+# =========================================================
 
-with col_t1:
-    st.subheader("Content Added Over Time (by Year)")
-    added_trend = filtered_df['year_added'].dropna().value_counts().sort_index()
-    if not added_trend.empty:
-        fig, ax = plt.subplots(figsize=(6.5, 3.5))
-        ax.plot(added_trend.index.astype(int), added_trend.values, marker='o', color=NETFLIX_RED, linewidth=2.5, markersize=5)
-        ax.fill_between(added_trend.index.astype(int), added_trend.values, color=NETFLIX_RED, alpha=0.25)
-        for x, y in zip(added_trend.index.astype(int), added_trend.values):
-            ax.annotate(f'{y}', (x, y), textcoords="offset points", xytext=(0, 6), ha='center', fontsize=8, color=LIGHT_GRAY)
-        ax.set_xlabel("Year Added", fontsize=10)
-        ax.set_ylabel("Titles Added", fontsize=10)
-        ax.grid(True, linestyle='--', alpha=0.3)
-        st.pyplot(fig, clear_figure=True)
-    else:
-        st.info("Date added information not available for selected subset.")
+st.header("🌍 Country Analysis")
 
-with col_t2:
-    st.subheader("Original Release Year Distribution")
-    release_trend = filtered_df[filtered_df['release_year'] >= 2000]['release_year'].value_counts().sort_index()
-    if not release_trend.empty:
-        fig, ax = plt.subplots(figsize=(6.0, 3.5))
-        ax.bar(release_trend.index.astype(int), release_trend.values, color='#454545', edgecolor=NETFLIX_RED, linewidth=1)
-        ax.set_xlabel("Release Year (>= 2000)", fontsize=10)
-        ax.set_ylabel("Titles Released", fontsize=10)
-        ax.grid(axis='y', linestyle='--', alpha=0.3)
-        st.pyplot(fig, clear_figure=True)
-    else:
-        st.info("No release year data.")
+country_series = pd.Series(
+    [
+        country
+        for values in filtered_df["country_list"]
+        for country in values
+    ]
+)
 
-st.divider()
+top_countries = (
+    country_series
+    .value_counts()
+    .head(10)
+    .sort_values()
+)
 
-# ---------------------------------------------------------
-# SECTION 5: Ratings
-# ---------------------------------------------------------
-st.markdown("### 🎯 Maturity Ratings Analysis")
 
-col_r1, col_r2 = st.columns([1.1, 1.2])
+if not top_countries.empty:
 
-with col_r1:
-    st.subheader("Rating Distribution")
-    top_ratings = filtered_df['rating_imputed'].value_counts().head(10)
-    if not top_ratings.empty:
-        fig, ax = plt.subplots(figsize=(6.0, 3.5))
-        bars = ax.bar(top_ratings.index, top_ratings.values, color=NETFLIX_RED, width=0.6, edgecolor='#333333')
-        for b in bars:
-            h = b.get_height()
-            ax.annotate(f'{h:,}', xy=(b.get_x() + b.get_width()/2, h),
-                        xytext=(0, 4), textcoords="offset points", ha='center', va='bottom', fontsize=8, color=LIGHT_GRAY)
-        ax.set_xlabel("Rating", fontsize=10)
-        ax.set_ylabel("Titles", fontsize=10)
-        ax.grid(axis='y', linestyle='--', alpha=0.3)
-        plt.xticks(rotation=45)
-        st.pyplot(fig, clear_figure=True)
+    fig, ax = plt.subplots(figsize=(9, 5))
 
-with col_r2:
-    st.subheader("Rating Breakdown by Type")
-    rating_by_type = pd.crosstab(filtered_df['rating_imputed'], filtered_df['type'])
-    # Pick top 8 overall ratings
-    top_8_ratings = top_ratings.head(8).index
-    rating_by_type = rating_by_type.reindex(top_8_ratings).fillna(0)
-    
-    if not rating_by_type.empty:
-        fig, ax = plt.subplots(figsize=(6.5, 3.5))
-        rating_by_type.plot(kind='bar', stacked=True, color=[NETFLIX_RED, '#00A8E8'], ax=ax, width=0.65)
-        ax.set_xlabel("Rating", fontsize=10)
-        ax.set_ylabel("Count", fontsize=10)
-        ax.legend(title="", frameon=True, facecolor=CARD_COLOR, edgecolor='#444444')
-        ax.grid(axis='y', linestyle='--', alpha=0.3)
-        plt.xticks(rotation=45)
-        st.pyplot(fig, clear_figure=True)
+    ax.barh(
+        top_countries.index,
+        top_countries.values,
+        color=RED
+    )
+
+    ax.set_xlabel("Number of Titles")
+    ax.set_facecolor(CARD)
+    fig.patch.set_facecolor(DARK)
+
+    st.pyplot(fig)
+    plt.close(fig)
+
 
 st.divider()
 
-# ---------------------------------------------------------
-# SECTION 6: Movie Analysis
-# ---------------------------------------------------------
-st.markdown("### 🎥 Movie Analysis")
 
-movies_subset = filtered_df[filtered_df['type'] == 'Movie']
+# =========================================================
+# TIME ANALYSIS
+# =========================================================
 
-if not movies_subset.empty:
-    durations = movies_subset['duration_num'].dropna()
-    col_m1, col_m2 = st.columns([1.2, 1])
-    
-    with col_m1:
-        st.subheader("Movie Duration Distribution (minutes)")
-        if not durations.empty:
-            fig, ax = plt.subplots(figsize=(6.5, 3.5))
-            sns.histplot(durations, bins=30, kde=True, color=NETFLIX_RED, edgecolor='#222222', ax=ax, alpha=0.7)
-            mean_d = durations.mean()
-            median_d = durations.median()
-            ax.axvline(mean_d, color='#00FFFF', linestyle='--', linewidth=1.5, label=f'Mean: {mean_d:.1f}m')
-            ax.axvline(median_d, color='#FFA500', linestyle='-', linewidth=1.5, label=f'Median: {median_d:.0f}m')
-            ax.set_xlabel("Duration (min)", fontsize=10)
-            ax.set_ylabel("Count", fontsize=10)
-            ax.legend(frameon=True, facecolor=CARD_COLOR, edgecolor='#444444')
-            ax.grid(axis='y', linestyle='--', alpha=0.3)
-            st.pyplot(fig, clear_figure=True)
-            
-    with col_m2:
-        st.subheader("Top Movie Directors")
-        all_directors = pd.Series([d.strip() for d in movies_subset['director'].dropna().astype(str).str.split(',').explode() if d.strip() and d.strip() != 'Unknown Director'])
-        top_directors = all_directors.value_counts().head(8).sort_values(ascending=True)
-        if not top_directors.empty:
-            fig, ax = plt.subplots(figsize=(6.0, 3.5))
-            bars = ax.barh(top_directors.index, top_directors.values, color=NETFLIX_RED, height=0.6)
-            for b in bars:
-                w = b.get_width()
-                ax.annotate(f' {w}', xy=(w, b.get_y() + b.get_height()/2),
-                            xytext=(3, 0), textcoords="offset points", ha='left', va='center', fontsize=9, color=LIGHT_GRAY)
-            ax.set_xlabel("Directed Movies", fontsize=10)
-            ax.set_xlim(0, max(top_directors.values) + 3)
-            ax.grid(axis='x', linestyle='--', alpha=0.3)
-            st.pyplot(fig, clear_figure=True)
-        else:
-            st.info("No director data found.")
-            
-    # Movie stats summary
-    if not durations.empty:
-        ms1, ms2, ms3, ms4 = st.columns(4)
-        ms1.metric("Average Duration", f"{durations.mean():.1f} min")
-        ms2.metric("Median Duration", f"{durations.median():.0f} min")
-        ms3.metric("Shortest Movie", f"{int(durations.min())} min")
-        ms4.metric("Longest Movie", f"{int(durations.max())} min")
-else:
-    st.info("No movie content available in the selected filter range.")
+st.header("📈 Release Trends")
+
+release_data = (
+    filtered_df["release_year"]
+    .dropna()
+    .astype(int)
+    .value_counts()
+    .sort_index()
+)
+
+
+if not release_data.empty:
+
+    fig, ax = plt.subplots(figsize=(11, 4))
+
+    ax.plot(
+        release_data.index,
+        release_data.values,
+        marker="o",
+        color=RED,
+        linewidth=2
+    )
+
+    ax.set_xlabel("Release Year")
+    ax.set_ylabel("Number of Titles")
+
+    ax.set_facecolor(CARD)
+    fig.patch.set_facecolor(DARK)
+
+    st.pyplot(fig)
+    plt.close(fig)
+
 
 st.divider()
 
-# ---------------------------------------------------------
-# SECTION 7: Searchable Data Table & CSV Download
-# ---------------------------------------------------------
-st.markdown("### 📑 Interactive Data Explorer")
 
-search_term = st.text_input("🔍 Search catalogue by title, director, country, or genre:", "")
-table_display_df = filtered_df[['show_id', 'type', 'title', 'director_imputed', 'country_imputed', 'release_year', 'rating_imputed', 'duration', 'listed_in', 'date_added']]
-table_display_df = table_display_df.rename(columns={
-    'director_imputed': 'director',
-    'country_imputed': 'country',
-    'rating_imputed': 'rating'
-})
+# =========================================================
+# RATING ANALYSIS
+# =========================================================
 
-if search_term:
+st.header("🎯 Rating Analysis")
+
+rating_data = (
+    filtered_df["rating_display"]
+    .value_counts()
+    .head(10)
+)
+
+
+if not rating_data.empty:
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    ax.bar(
+        rating_data.index,
+        rating_data.values,
+        color=RED
+    )
+
+    ax.set_xlabel("Rating")
+    ax.set_ylabel("Number of Titles")
+
+    plt.xticks(rotation=45)
+
+    ax.set_facecolor(CARD)
+    fig.patch.set_facecolor(DARK)
+
+    st.pyplot(fig)
+    plt.close(fig)
+
+
+st.divider()
+
+
+# =========================================================
+# MOVIE DURATION
+# =========================================================
+
+st.header("🎥 Movie Duration")
+
+movie_data = filtered_df[
+    filtered_df["type"] == "Movie"
+]
+
+durations = movie_data[
+    "duration_num"
+].dropna()
+
+
+if not durations.empty:
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+
+        sns.histplot(
+            durations,
+            bins=30,
+            kde=True,
+            color=RED,
+            ax=ax
+        )
+
+        ax.set_xlabel("Duration (minutes)")
+        ax.set_ylabel("Movies")
+
+        ax.set_facecolor(CARD)
+        fig.patch.set_facecolor(DARK)
+
+        st.pyplot(fig)
+        plt.close(fig)
+
+
+    with col2:
+
+        st.metric(
+            "Average Runtime",
+            f"{durations.mean():.1f} min"
+        )
+
+        st.metric(
+            "Median Runtime",
+            f"{durations.median():.0f} min"
+        )
+
+        st.metric(
+            "Shortest Movie",
+            f"{durations.min():.0f} min"
+        )
+
+        st.metric(
+            "Longest Movie",
+            f"{durations.max():.0f} min"
+        )
+
+
+st.divider()
+
+
+# =========================================================
+# SEARCH
+# =========================================================
+
+st.header("🔎 Movie Explorer")
+
+search = st.text_input(
+    "Search by title, director, country or genre"
+)
+
+
+display_df = filtered_df[
+    [
+        "show_id",
+        "type",
+        "title",
+        "director_display",
+        "country_display",
+        "release_year",
+        "rating_display",
+        "duration",
+        "listed_in",
+        "date_added"
+    ]
+].copy()
+
+
+display_df.columns = [
+    "ID",
+    "Type",
+    "Title",
+    "Director",
+    "Country",
+    "Release Year",
+    "Rating",
+    "Duration",
+    "Genre",
+    "Date Added"
+]
+
+
+if search:
+
     mask = (
-        table_display_df['title'].astype(str).str.contains(search_term, case=False, na=False) |
-        table_display_df['director'].astype(str).str.contains(search_term, case=False, na=False) |
-        table_display_df['country'].astype(str).str.contains(search_term, case=False, na=False) |
-        table_display_df['listed_in'].astype(str).str.contains(search_term, case=False, na=False)
+        display_df["Title"]
+        .astype(str)
+        .str.contains(
+            search,
+            case=False,
+            na=False
+        )
+        |
+        display_df["Director"]
+        .astype(str)
+        .str.contains(
+            search,
+            case=False,
+            na=False
+        )
+        |
+        display_df["Country"]
+        .astype(str)
+        .str.contains(
+            search,
+            case=False,
+            na=False
+        )
+        |
+        display_df["Genre"]
+        .astype(str)
+        .str.contains(
+            search,
+            case=False,
+            na=False
+        )
     )
-    table_display_df = table_display_df[mask]
+
+    display_df = display_df[mask]
+
+
+display_df = display_df.sort_values(
+    "Release Year",
+    ascending=False
+)
+
 
 st.dataframe(
-    table_display_df.sort_values('release_year', ascending=False),
+    display_df,
     use_container_width=True,
     hide_index=True
 )
 
-csv_data = table_display_df.to_csv(index=False).encode('utf-8')
+
+# =========================================================
+# CSV DOWNLOAD
+# =========================================================
+
+csv = display_df.to_csv(
+    index=False
+).encode("utf-8")
+
+
 st.download_button(
-    label="📥 Download Filtered Data (CSV)",
-    data=csv_data,
-    file_name="netflix_filtered_data.csv",
-    mime="text/csv",
-    use_container_width=False
+    "📥 Download Movie Data",
+    data=csv,
+    file_name="movie_data.csv",
+    mime="text/csv"
 )
+
 
 st.divider()
 
-# ---------------------------------------------------------
-# SECTION 8: Key Insights (Dynamically Computed)
-# ---------------------------------------------------------
-st.markdown("### 💡 Key Analytical Insights")
 
-# Calculate dynamic statistics
-total_cnt = len(filtered_df)
-pct_movies = (movies_cnt / total_cnt * 100) if total_cnt > 0 else 0
-pct_tv = (tv_cnt / total_cnt * 100) if total_cnt > 0 else 0
+# =========================================================
+# INSIGHTS
+# =========================================================
 
-top_genre_name = all_filtered_genres.value_counts().index[0] if not all_filtered_genres.empty else "N/A"
-top_genre_count = all_filtered_genres.value_counts().values[0] if not all_filtered_genres.empty else 0
+st.header("💡 Key Insights")
 
-top_country_name = all_filtered_countries.value_counts().index[0] if not all_filtered_countries.empty else "N/A"
-top_country_count = all_filtered_countries.value_counts().values[0] if not all_filtered_countries.empty else 0
 
-peak_rel_year = filtered_df['release_year'].value_counts().index[0] if not filtered_df.empty else "N/A"
-peak_rel_count = filtered_df['release_year'].value_counts().values[0] if not filtered_df.empty else 0
+top_genre = (
+    genre_series.value_counts().index[0]
+    if not genre_series.empty
+    else "N/A"
+)
 
-top_rating_name = filtered_df['rating_imputed'].value_counts().index[0] if not filtered_df.empty else "N/A"
-top_rating_count = filtered_df['rating_imputed'].value_counts().values[0] if not filtered_df.empty else 0
+top_country = (
+    country_series.value_counts().index[0]
+    if not country_series.empty
+    else "N/A"
+)
 
-avg_runtime = filtered_df[filtered_df['type']=='Movie']['duration_num'].mean()
+top_rating = (
+    filtered_df["rating_display"]
+    .value_counts().index[0]
+    if not filtered_df.empty
+    else "N/A"
+)
 
-st.markdown(f"""
-<div class="insight-box">
-    <strong>1. Catalogue Split:</strong> Movies represent <strong>{pct_movies:.1f}%</strong> ({movies_cnt:,} titles) of the catalogue, while TV Shows comprise <strong>{pct_tv:.1f}%</strong> ({tv_cnt:,} titles).
-</div>
-<div class="insight-box">
-    <strong>2. Dominant Genre:</strong> The most frequent content category is <strong>{top_genre_name}</strong>, appearing in <strong>{top_genre_count:,}</strong> titles.
-</div>
-<div class="insight-box">
-    <strong>3. Content Production Hub:</strong> <strong>{top_country_name}</strong> is the primary source country with <strong>{top_country_count:,}</strong> titles represented.
-</div>
-<div class="insight-box">
-    <strong>4. Peak Release Production:</strong> The year with the highest volume of original content is <strong>{peak_rel_year}</strong> with <strong>{peak_rel_count:,}</strong> releases.
-</div>
-<div class="insight-box">
-    <strong>5. Maturity Ratings:</strong> The predominant content rating is <strong>{top_rating_name}</strong> with <strong>{top_rating_count:,}</strong> titles, indicating a catalogue strongly targeted toward mature audiences.
-</div>
-""", unsafe_allow_html=True)
 
-if not np.isnan(avg_runtime):
-    st.markdown(f"""
+movie_percentage = (
+    movies / total_titles * 100
+    if total_titles > 0
+    else 0
+)
+
+
+tv_percentage = (
+    tv_shows / total_titles * 100
+    if total_titles > 0
+    else 0
+)
+
+
+st.markdown(
+    f"""
     <div class="insight-box">
-        <strong>6. Average Movie Runtime:</strong> Feature films in this selection average <strong>{avg_runtime:.1f} minutes</strong>, providing a useful summary of movie runtime patterns in the filtered dataset.
+    🎬 <b>Content Split:</b>
+    Movies represent {movie_percentage:.1f}% of the selected catalogue,
+    while TV Shows represent {tv_percentage:.1f}%.
     </div>
-    """, unsafe_allow_html=True)
+
+    <div class="insight-box">
+    🎭 <b>Popular Genre:</b>
+    {top_genre} is the most frequently represented genre.
+    </div>
+
+    <div class="insight-box">
+    🌍 <b>Top Country:</b>
+    {top_country} has the highest number of represented titles.
+    </div>
+
+    <div class="insight-box">
+    ⭐ <b>Popular Rating:</b>
+    {top_rating} is the most common content rating.
+    </div>
+
+    <div class="insight-box">
+    📅 <b>Latest Release Year:</b>
+    {latest_year}.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# FOOTER
+# =========================================================
+
+st.markdown("---")
+
+st.caption(
+    "🎬 MovieHub — Interactive Movie & TV Show Analytics Platform"
+)
